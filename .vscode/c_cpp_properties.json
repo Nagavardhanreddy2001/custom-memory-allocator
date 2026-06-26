@@ -1,0 +1,12 @@
+{
+  "configurations": [{
+    "name": "Linux",
+    "includePath": [
+      "${workspaceFolder}/src"
+    ],
+    "compilerPath": "/usr/bin/gcc",
+    "cStandard": "c11",
+    "intelliSenseMode": "gcc-x64"
+  }],
+  "version": 4
+}
