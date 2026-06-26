@@ -1,0 +1,7 @@
+memtest
+memtest_vg
+memtest_asan
+bench
+*.o
+*.out
+.DS_Store
