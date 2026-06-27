@@ -2,7 +2,7 @@
 set -e
 echo "=== Building ==="
 make clean && make
-echo "=== Stress test ==="
+echo "=== Stress Test ==="
 ./memtest
 echo "=== Valgrind ==="
 make valgrind
