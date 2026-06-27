@@ -4,6 +4,9 @@ A dynamic memory allocator built from scratch in C, replicating
 malloc, free, and realloc using sbrk() system calls — no standard
 library heap functions used anywhere.
 
+All heap growth is done exclusively via sbrk() — this project
+reimplements the allocator layer that sits between the OS and libc.
+
 ## Three Strategies Implemented
 
 | Strategy             | Mechanism                         | Strength         |
@@ -15,12 +18,12 @@ library heap functions used anywhere.
 ## Benchmark Results (5,000 ops, 500 live slots)
 
 ### Speed
-| Workload         | First-fit | Best-fit | Seg-lists | Speedup        |
-|------------------|-----------|----------|-----------|----------------|
-| Small (1-64B)    |  3.14ms   |  5.80ms  |  0.39ms   | 8x vs first-fit|
-| Medium (64-512B) |  6.07ms   | 13.14ms  |  0.86ms   | 7x vs first-fit|
-| Large (512-4KB)  | 11.10ms   | 18.89ms  |  2.70ms   | 4x vs first-fit|
-| Mixed (1-4KB)    | 10.30ms   | 20.35ms  |  2.71ms   | 4x vs first-fit|
+| Workload         | First-fit | Best-fit | Seg-lists | Speedup         |
+|------------------|-----------|----------|-----------|-----------------|
+| Small (1-64B)    |  3.14ms   |  5.80ms  |  0.39ms   | 8x vs first-fit |
+| Medium (64-512B) |  6.07ms   | 13.14ms  |  0.86ms   | 7x vs first-fit |
+| Large (512-4KB)  | 11.10ms   | 18.89ms  |  2.70ms   | 4x vs first-fit |
+| Mixed (1-4KB)    | 10.30ms   | 20.35ms  |  2.71ms   | 4x vs first-fit |
 
 ### Utilization
 | Workload         | First-fit | Best-fit | Delta |
@@ -70,7 +73,7 @@ custom-memory-allocator/
 ## Design Decisions
 
 - fwd/bwd pointers stored as void* (8B on x86-64) in free block payload
-- Minimum block size: 24 bytes (2*DSIZE + 2*WSIZE = header + fwd + bwd + footer)
+- Minimum block: 24 bytes (header 4B + fwd 8B + bwd 8B + footer 4B)
 - Utilization metric excludes header+footer overhead (2*WSIZE per block)
 - mm_init and seg_mm_init reset all free lists on each call for clean benchmark runs
 - Coalescing is immediate on every free() — all 4 adjacency cases handled
