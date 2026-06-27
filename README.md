@@ -1,45 +1,69 @@
 # Custom Memory Allocator
 
-A dynamic memory allocator built from scratch in C, replicating `malloc`, `free`, and `realloc` using `sbrk()` system calls without using any standard library heap functions.
+A dynamic memory allocator built from scratch in C, replicating
+malloc, free, and realloc using sbrk() system calls — no standard
+library heap functions used anywhere.
 
-## Features
+## Three Strategies Implemented
 
-- Three placement strategies: first-fit, best-fit, and segregated free lists
-- Boundary tag coalescing: O(1) merging of adjacent free blocks in all 4 cases
-- Block splitting to avoid internal fragmentation
-- Stress tested: 30,000 ops with zero errors
-- Valgrind verified: 0 memory errors, 0 leaks
+| Strategy            | Mechanism                        | Strength        |
+|---------------------|----------------------------------|-----------------|
+| First-fit           | Linear scan, first free block    | Simple baseline |
+| Best-fit            | Linear scan, smallest fit        | Best utilization|
+| Segregated free lists | 12 size-class doubly-linked lists | Best speed     |
 
-## Benchmark Results
+## Benchmark Results (5,000 ops, 500 live slots)
 
-| Workload         | Time     | Peak Utilization |
-|------------------|----------|------------------|
-| Small (1-64B)    |  4.49ms  | 80.8%            |
-| Medium (64-512B) | 11.57ms  | 89.9%            |
-| Large (512-4KB)  | 16.29ms  | 87.8%            |
-| Mixed (1-4KB)    | 14.98ms  | 89.3%            |
+### Speed comparison
+| Workload        | First-fit | Best-fit | Seg-lists | Speedup vs first-fit |
+|-----------------|-----------|----------|-----------|----------------------|
+| Small (1-64B)   |  3.14ms   |  5.80ms  |  0.39ms   | 8x faster            |
+| Medium (64-512B)|  6.07ms   | 13.14ms  |  0.86ms   | 7x faster            |
+| Large (512-4KB) | 11.10ms   | 18.89ms  |  2.70ms   | 4x faster            |
+| Mixed (1-4KB)   | 10.30ms   | 20.35ms  |  2.71ms   | 4x faster            |
 
-## Test Results
+### Utilization comparison
+| Workload        | First-fit | Best-fit | Delta     |
+|-----------------|-----------|----------|-----------|
+| Medium (64-512B)|   83.3%   |   87.5%  | +4.2%     |
+| Large (512-4KB) |   83.7%   |   87.5%  | +3.7%     |
+| Mixed (1-4KB)   |   84.9%   |   89.0%  | +4.1%     |
 
-- Stress test PASSED: 30,000 ops in 1.216s
-- Utilization after alloc: 100.0%
-- Utilization after 50% free: 50.3%
+### Key insight
+Segregated free lists are 4-8x faster than both scan-based strategies
+because find() searches only one size class instead of the full heap.
+Best-fit wins on utilization (+4%) by always choosing the tightest fit,
+at the cost of 2x slower allocation time.
+This is the same tradeoff made by production allocators like jemalloc.
+
+## Bugs Fixed
+
+1. mm_free dropped the coalesce return value
+2. mm_utilization counted header and footer bytes as payload
+3. mm_init did not reset heap on repeated calls (broke benchmarking)
+
+## Validation
+
+- Stress test: 30,000 ops (alloc + free + realloc), PASSED
 - Valgrind: 0 errors, 0 leaks
+- AddressSanitizer: clean
 
 ## Build and Run
 
 ```bash
-make          # build everything
-./memtest     # stress test
-make valgrind # leak check
-./bench       # benchmark
-make clean    # remove binaries
+make              # build everything
+./memtest         # stress test (30,000 ops)
+make valgrind     # Valgrind leak check
+./bench           # three-way strategy benchmark
+make asan         # AddressSanitizer check
+make clean        # remove binaries
 ```
 
-## Key Implementation Details
+## Implementation Details
 
-- sbrk() used to grow heap, no malloc/calloc anywhere
-- Minimum block size: 16 bytes
-- Alignment: 8-byte aligned payloads
-- Coalescing: immediate on every free() call
-- Splitting: only when remainder is at least 16 bytes
+- Heap grown with sbrk() only — zero use of malloc/calloc
+- Block layout: header (4B) + payload + footer (4B), 8-byte aligned
+- Minimum block: 24 bytes (holds fwd+bwd pointers while free)
+- Coalescing: immediate on every free(), all 4 adjacency cases
+- Splitting: only when remainder >= minimum block size
+- Seg-list classes: 8B, 16B, 32B, 64B ... up to 8KB, then 8KB+

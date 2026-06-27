@@ -1,6 +1,6 @@
 CC     = gcc
 CFLAGS = -Wall -Wextra -O2 -g
-SRC    = src/mm.c src/utils.c
+SRC    = src/mm.c src/mm_seg.c src/utils.c
 
 all: memtest bench
 

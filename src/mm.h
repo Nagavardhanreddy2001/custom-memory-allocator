@@ -3,10 +3,11 @@
 
 #include <stddef.h>
 
-void  mm_init(void);
-void *mm_malloc(size_t size);
-void  mm_free(void *ptr);
-void *mm_realloc(void *ptr, size_t size);
+void   mm_init(void);
+void  *mm_malloc(size_t size);
+void   mm_free(void *ptr);
+void  *mm_realloc(void *ptr, size_t size);
 double mm_utilization(void);
+void   mm_set_strategy(int best);  /* 0=first-fit, 1=best-fit */
 
-#endif /* MM_H */
+#endif

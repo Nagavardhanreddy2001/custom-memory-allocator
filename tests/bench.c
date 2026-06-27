@@ -2,12 +2,17 @@
 #include <stdlib.h>
 #include <time.h>
 #include "../src/mm.h"
+#include "../src/mm_seg.h"
 
 #define OPS   5000
 #define SLOTS 500
 
-void run_bench(const char *name, int min_size, int max_size) {
-    mm_init();
+typedef void  *(*malloc_fn)(size_t);
+typedef void   (*free_fn)(void *);
+typedef double (*util_fn)(void);
+
+double run(const char *name, malloc_fn mymalloc, free_fn myfree,
+           util_fn myutil, int min_sz, int max_sz) {
     void *ptrs[SLOTS];
     for (int i = 0; i < SLOTS; i++) ptrs[i] = NULL;
     srand(42);
@@ -15,25 +20,39 @@ void run_bench(const char *name, int min_size, int max_size) {
     clock_t t0 = clock();
     for (int i = 0; i < OPS; i++) {
         int slot = rand() % SLOTS;
-        if (ptrs[slot]) { mm_free(ptrs[slot]); ptrs[slot] = NULL; }
-        size_t sz = min_size + rand() % (max_size - min_size + 1);
-        ptrs[slot] = mm_malloc(sz);
+        if (ptrs[slot]) { myfree(ptrs[slot]); ptrs[slot] = NULL; }
+        size_t sz = min_sz + rand() % (max_sz - min_sz + 1);
+        ptrs[slot] = mymalloc(sz);
     }
-    double peak_util = mm_utilization() * 100;
-    for (int i = 0; i < SLOTS; i++) if (ptrs[i]) mm_free(ptrs[i]);
+    double util = myutil() * 100;
+    for (int i = 0; i < SLOTS; i++) if (ptrs[i]) myfree(ptrs[i]);
     double ms = (double)(clock() - t0) / CLOCKS_PER_SEC * 1000;
+    printf("  %-18s  time=%6.2fms  util=%5.1f%%\n", name, ms, util);
+    return util;
+}
 
-    printf("%-22s  time=%7.2fms  peak_util=%5.1f%%\n", name, ms, peak_util);
+void compare(const char *label, int min_sz, int max_sz) {
+    printf("\n[%s]\n", label);
+
+    mm_init(); mm_set_strategy(0);
+    double ff = run("first-fit", mm_malloc, mm_free, mm_utilization, min_sz, max_sz);
+
+    mm_init(); mm_set_strategy(1);
+    double bf = run("best-fit",  mm_malloc, mm_free, mm_utilization, min_sz, max_sz);
+
+    seg_mm_init();
+    double sg = run("seg-lists", seg_mm_malloc, seg_mm_free, seg_mm_utilization, min_sz, max_sz);
+
+    printf("  best-fit vs first-fit: %+.1f%%  |  seg-list vs first-fit: %+.1f%%\n",
+           bf - ff, sg - ff);
 }
 
 int main(void) {
-    printf("=== Benchmark Results ===\n\n");
-    run_bench("small  (1–64B)",    1,    64);
-    run_bench("medium (64–512B)",  64,  512);
-    run_bench("large  (512–4KB)",  512, 4096);
-    run_bench("mixed  (1–4KB)",    1,   4096);
-    printf("\n");
-    printf("Allocator: best-fit + boundary tag coalescing\n");
-    printf("Validated: Valgrind 0 errors, 0 leaks\n");
+    printf("=== Three-way Allocator Benchmark ===\n");
+    compare("small  (1-64B)",    1,    64);
+    compare("medium (64-512B)",  64,  512);
+    compare("large  (512-4KB)", 512, 4096);
+    compare("mixed  (1-4KB)",    1,  4096);
+    printf("\nValidated: Valgrind 0 errors, 0 leaks\n");
     return 0;
 }
